@@ -49,6 +49,46 @@ who is at the other end and nobody in between can look. That channel is SSL.
 The pattern: SSL and TLS did not become secure by adding features. They became secure by
 removing options. TLS 1.3 has 5 cipher suites; TLS 1.2 had over 300.
 
+### SSL vs TLS: one protocol family, two names
+
+**TL;DR** — TLS *is* SSL, renamed in 1999 when Netscape handed the protocol to the IETF. There is
+no "SSL or TLS" choice to make today: every SSL version is prohibited or deprecated, and everything
+deployed is TLS 1.2 or 1.3. When someone says "SSL" (an "SSL certificate", "enable SSL on the
+database"), they mean TLS; the word survived in tool and option names, not on the wire.
+
+| | SSL 2.0 / 3.0 (1995, 1996) | TLS 1.0 → 1.3 (1999 → 2018) |
+|---|---|---|
+| Owner | Netscape, proprietary spec | IETF, open RFCs (2246, 4346, 5246, 8446) |
+| Version bytes on the wire | `0x0200`, `0x0300` | TLS 1.0 is literally **SSL 3.1** (`0x0301`); 1.1 = `0x0302`; 1.2 = `0x0303`; 1.3 keeps `0x0303` in the legacy field and negotiates through the `supported_versions` extension |
+| Record integrity | SSL 3.0: ad hoc keyed hash (an HMAC precursor, not HMAC) | HMAC (RFC 2104) in 1.0–1.2; AEAD only (AES-GCM, ChaCha20-Poly1305) in 1.3 |
+| Key derivation | Fixed MD5 + SHA-1 mix | PRF: MD5⊕SHA-1 (1.0/1.1), SHA-256 (1.2), HKDF (1.3) |
+| CBC padding | Length checked, padding bytes **not** checked → POODLE | Every padding byte checked (1.0+); CBC removed entirely (1.3) |
+| Alerts | Small, ambiguous set | Added `protocol_version`, `unknown_ca`, `decode_error`, `insufficient_security`… (what our server sends below) |
+| Downgrade protection | None | `TLS_FALLBACK_SCSV` (RFC 7507); 1.3 sentinel bytes in `ServerHello.random` |
+| Standing today | SSL 2.0 prohibited (RFC 6176, 2011); SSL 3.0 must not be used (RFC 7568, 2015) | 1.0/1.1 deprecated (RFC 8996, 2021); **1.2 floor, 1.3 default** |
+
+Where the old name still lives, and why that is harmless: OpenSSL and `libssl`, nginx
+`ssl_certificate`/`ssl_protocols`, Apache `SSLEngine`, Java `SSLContext`, Python's `ssl` module,
+PostgreSQL `sslmode=verify-full`, MySQL `--ssl-mode`, JDBC `useSSL`, .NET `SslStream`, Node's
+`ERR_SSL_*` error codes, curl's "SSL certificate problem", AWS docs saying "SSL/TLS certificate".
+None of those speak SSL; they are names frozen in the 1990s. The certificate itself is neither
+"SSL" nor "TLS": it is X.509 (RFC 5280), and the same file serves any protocol version.
+
+See it yourself in this chapter:
+
+- `npm run 02:server` then `npm run 02:client`: case (b) prints `HTTP 200 over TLSv1.3` (Node's
+  `socket.getProtocol()`), and the server log shows the negotiated version and cipher per handshake.
+- `npm test -- 02`: the test `refuses a client that can do at most TLS 1.1 with a protocol_version
+  alert` forces a client down to TLS 1.0/1.1 and the server answers with alert 70; Node reports it as
+  `ERR_SSL_TLSV1_ALERT_PROTOCOL_VERSION`, an "SSL" error name carrying a TLS alert.
+- `openssl s_client -help | grep -E 'ssl3|tls1'`: OpenSSL 3 lists `-tls1` … `-tls1_3` and no
+  `-ssl3`. The library named after SSL no longer compiles SSL in by default.
+- `openssl s_client -connect localhost:4443 -tls1_1 -cipher 'DEFAULT:@SECLEVEL=0'` against the
+  running lab server prints `SSL routines:ssl3_read_bytes:tlsv1 alert protocol version ... SSL alert
+  number 70`: three names from three decades in one error line, describing one TLS alert. Swap
+  `-tls1_1` for `-tls1_3 -CAfile chapters/02-tls/certs/ca.pem`: full handshake, `Protocol: TLSv1.3`,
+  `Verify return code: 0 (ok)`.
+
 ## How it works
 
 ### What you get, and what you do not
