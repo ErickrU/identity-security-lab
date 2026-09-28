@@ -1,0 +1,24 @@
+# dependencies
+node_modules
+
+# CDK
+**/cdk.out
+**/.cdk.staging
+**/cdk-outputs.json
+**/cdk.context.json
+
+# generated key material (chapters regenerate it)
+**/certs/
+*.pem
+*.key
+*.crt
+*.p12
+
+# compiled output (the lab runs TypeScript directly)
+*.js
+!vitest.config.mjs
+*.d.ts
+
+# local env / OS
+.env
+.DS_Store

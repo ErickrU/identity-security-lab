@@ -1,0 +1,55 @@
+{
+  "name": "identity-security-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hands-on lab for users and security: passwords and sessions, TLS, tokens and JWT, Kerberos, OAuth 2.0, OpenID Connect (with a small IdP you run locally), SSO and federation, SAML, MFA, IAM vs Identity Center, Cognito pools, authorization models and threats. Every chapter: why it was invented, how it works, a runnable example, scenarios, pros, cons and alternatives.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test",
+    "01": "tsx chapters/01-passwords-and-sessions/src/server.ts",
+    "01:demo": "tsx chapters/01-passwords-and-sessions/src/demo.ts",
+    "02:certs": "bash chapters/02-tls/scripts/make-certs.sh",
+    "02:server": "tsx chapters/02-tls/src/server.ts",
+    "02:client": "tsx chapters/02-tls/src/client.ts",
+    "03": "tsx chapters/03-tokens-and-jwt/src/demo.ts",
+    "04": "tsx chapters/04-kerberos/src/demo.ts",
+    "05": "tsx chapters/05-oauth2/src/demo.ts",
+    "06": "tsx chapters/06-oidc/src/demo.ts",
+    "07": "tsx chapters/07-sso-and-federation/src/demo.ts",
+    "08": "tsx chapters/08-saml/src/demo.ts",
+    "09": "tsx chapters/09-mfa-totp-passkeys/src/totp-cli.ts",
+    "10": "tsx chapters/10-aws-iam-and-federation/src/demo.ts",
+    "10:synth": "cd chapters/10-aws-iam-and-federation && cdk synth --quiet",
+    "11": "tsx chapters/11-cognito-pools/src/demo.ts",
+    "11:synth": "cd chapters/11-cognito-pools && cdk synth --quiet",
+    "12": "tsx chapters/12-authorization/src/demo.ts",
+    "13": "tsx chapters/13-threat-model/src/demo.ts",
+    "idp": "tsx small-idp/src/idp.ts",
+    "api": "tsx small-idp/src/resource-server.ts",
+    "rp": "tsx small-idp/src/rp.ts",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "@types/qrcode-terminal": "0.12.2",
+    "aws-cdk": "2.1143.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.0.2"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity": "3.1141.0",
+    "@aws-sdk/client-cognito-identity-provider": "3.1141.0",
+    "@aws-sdk/client-s3": "3.1141.0",
+    "@aws-sdk/client-sts": "3.1141.0",
+    "aws-cdk-lib": "2.271.0",
+    "constructs": "10.8.1",
+    "qrcode-terminal": "0.12.0",
+    "samlify": "2.13.1"
+  }
+}

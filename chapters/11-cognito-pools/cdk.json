@@ -1,0 +1,10 @@
+{
+  "app": "npx tsx bin/app.ts",
+  "watch": {
+    "include": ["bin/**", "lib/**"],
+    "exclude": ["README.md", "cdk*.json", "**/*.test.ts", "cdk.out"]
+  },
+  "context": {
+    "@aws-cdk/core:enablePartitionLiterals": true
+  }
+}

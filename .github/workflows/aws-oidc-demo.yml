@@ -1,0 +1,79 @@
+# Chapter 10 · Federation into AWS from GitHub Actions with OpenID Connect. No AWS secret anywhere.
+#
+# Before running: deploy chapters/10-aws-iam-and-federation for YOUR fork/repository and a
+# protected ref, for example:
+#   npx cdk deploy -c githubRepo=YOUR-OWNER/identity-security-lab -c githubRef=refs/heads/main
+# Then copy the RoleArn output into a repository variable named AWS_OIDC_ROLE_ARN (Settings → Secrets and variables →
+# Actions → Variables). It is a variable, not a secret: a role ARN is not confidential. What lets
+# this workflow in is the token GitHub mints for this exact run, and the role's trust policy.
+name: aws-oidc-demo
+
+on:
+  workflow_dispatch:
+
+# `id-token: write` is what allows a job to request an OIDC token from GitHub. Without it the
+# ACTIONS_ID_TOKEN_REQUEST_URL / _TOKEN environment variables are simply not there.
+permissions:
+  id-token: write
+
+jobs:
+  prove-identity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request the OIDC token and print its claims (never the token itself)
+        env:
+          AUDIENCE: sts.amazonaws.com
+        run: |
+          set -euo pipefail
+          # The runner gets a short-lived bearer token that is only good for asking GitHub for an ID token.
+          # `audience` becomes the `aud` claim; the trust policy requires it to be sts.amazonaws.com.
+          response=$(curl -sSf -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${AUDIENCE}")
+          token=$(printf '%s' "${response}" | jq -r '.value')
+
+          # A JWT is header.payload.signature, base64url. Decode only the payload, pad it, print claims.
+          payload=$(printf '%s' "${token}" | cut -d. -f2 | tr '_-' '/+')
+          pad=$(( (4 - ${#payload} % 4) % 4 ))
+          payload="${payload}$(printf '%*s' "${pad}" '' | tr ' ' '=')"
+          printf '%s' "${payload}" | base64 -d | jq '{
+            iss, sub, aud, repository, repository_owner, ref, ref_type, event_name, actor,
+            runner_environment, job_workflow_ref, iat: (.iat | todate), exp: (.exp | todate)
+          }'
+          echo
+          echo "The trust policy compares sub against the TrustedSubject output of the stack and aud against sts.amazonaws.com."
+
+      - name: Exchange the token for AWS credentials (sts:AssumeRoleWithWebIdentity)
+        # The action requests the same kind of token, calls STS with it (an unsigned call: the
+        # token is the credential), and exports the temporary keys as environment variables.
+        # Immutable commit behind the official v4 tag, resolved 2026-09-27.
+        # Dependabot can propose reviewed SHA updates without silently moving the code we execute.
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: ${{ vars.AWS_OIDC_ROLE_ARN }}
+          role-session-name: gha-${{ github.run_id }}
+          aws-region: us-east-1
+
+      - name: Who am I in AWS? (needs no permission at all)
+        run: aws sts get-caller-identity
+
+      - name: Read the trust policy that let us in (the role's only permission)
+        run: |
+          aws iam get-role --role-name lab-github-actions-readonly \
+            --query 'Role.{Arn:Arn,MaxSessionDuration:MaxSessionDuration,Trust:AssumeRolePolicyDocument}' \
+            --output json
+
+      - name: Prove the role grants nothing else
+        run: |
+          set +e
+          output=$(aws s3 ls 2>&1)
+          exit_code=$?
+          set -e
+          if [ "${exit_code}" -eq 0 ]; then
+            echo "unexpected: the role can list buckets"; exit 1
+          fi
+          if ! grep -Eq 'AccessDenied|UnauthorizedOperation' <<<"${output}"; then
+            echo "the command failed, but not because IAM denied it:" >&2
+            printf '%s\n' "${output}" >&2
+            exit 1
+          fi
+          echo "s3:ListAllMyBuckets → AccessDenied, as designed (implicit deny: nothing allows it)."
